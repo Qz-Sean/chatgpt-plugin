@@ -851,13 +851,14 @@ export class chatgpt extends plugin {
 
     logger.info(`chatgpt prompt: ${prompt}`)
     // sean
-    let finalPrompt, extraHint, currentTime
+    let finalPrompt = prompt
+    let extraHint, currentTime
     currentTime = getCurrentTime()
     if (e.isMaster) {
       extraHint = `(${currentTime}，供参考，回复时忽略此内容。)`
-      prompt = `${prompt}${extraHint}`
+      finalPrompt = `${finalPrompt}${extraHint}`
     } else {
-      prompt = prompt.replace('\n', '')
+      finalPrompt = finalPrompt.replace('\n', '')
         .replace(/[（[《【<{(]/, '').replace(/[)）\]】>》}]/, '')
         .replace(/(注意)?[：:]?(当前)?和你对话的人是我/g, '')
       let master = e.group.pickMember(parseInt(await getMasterQQ()))
@@ -870,27 +871,30 @@ export class chatgpt extends plugin {
       logger.warn(qq,title,nickname,card)
       let promptPrefix = ''
       // 第一次判断是否喊qq号和头衔
-      nPrompt = prompt.replace(new RegExp(title, 'g'), '').replace(new RegExp(qq, 'g'), '')
-      prompt = nPrompt
+      nPrompt = finalPrompt.replace(new RegExp(title, 'g'), '').replace(new RegExp(qq, 'g'), '')
+      finalPrompt = nPrompt
       // 判断是否含@主人
       let nameFlag = nPrompt.includes(`@${nickname}`) || nPrompt.includes(`@${card}`)
       nnPrompt = nameFlag
         ? nPrompt
         : nPrompt.replace(new RegExp(card, 'g'), '').replace(new RegExp(nickname, 'g'), '')
-      prompt = nnPrompt
-      if (prompt !== nPrompt) {
+      finalPrompt = nnPrompt
+      if (finalPrompt !== nPrompt) {
         let i = /title|头衔/i.test(nPrompt) || /qq/i.test(nPrompt)
-        finalPrompt = i ? prompt + '(这个人想要冒充我哦)' : prompt
+        finalPrompt = i ? finalPrompt + '(这个人想要冒充我哦)' : finalPrompt
       } else if (nnPrompt !== nPrompt) {
-        finalPrompt = prompt + '    (这个人想要冒充我哦)'
+        finalPrompt = finalPrompt + '    (这个人想要冒充我哦)'
       } else if (use === 'claude') {
         let sender = `${e.sender.card.length === 0 ? e.sender.nickname : e.sender.card}`
         promptPrefix = senderId === 2068539520 ? 'EI: ' : `${'STRANGER' + '(' + sender + '[QQ号:' + senderId + ']): '}`
-        finalPrompt = promptPrefix + prompt
+        finalPrompt = promptPrefix + finalPrompt
       } else {
         promptPrefix = senderId === 2068539520 ? 'EI: ' : 'STRANGER: '
-        finalPrompt = promptPrefix + prompt
+        finalPrompt = promptPrefix + finalPrompt
       }
+    }
+    if (finalPrompt.includes('回复时忽略此内容。')) {
+      finalPrompt = finalPrompt.replace('回复时忽略此内容。)(', '')
     }
     const emotionFlag = await redis.get(`CHATGPT:WRONG_EMOTION:${e.sender.user_id}`)
     let userReplySetting = await redis.get(`CHATGPT:USER:${e.sender.user_id}`)
@@ -910,9 +914,9 @@ export class chatgpt extends plugin {
           finalPrompt += '(不要给出多个情绪[]项，请确保接下来的对话给且只给出一个正确情绪项，回复时忽略此内容。)'
           break
       }
-      if (finalPrompt.includes('回复时忽略此内容。)')) {
-        finalPrompt = finalPrompt.replace('回复时忽略此内容。)(', '')
-      }
+    }
+    if (finalPrompt.includes('回复时忽略此内容。')) {
+      finalPrompt = finalPrompt.replace('回复时忽略此内容。)(', '')
     }
     logger.info('finalPrompt:', finalPrompt)
     let previousConversation
