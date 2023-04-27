@@ -1047,6 +1047,7 @@ export class chatgpt extends plugin {
         .replace(/^@?(Sean Murphy|Sean|STRANGER|MIKO|EI|user|用户)[：:]?\s?/g, '')
         .replace(/^@?(影宝|神子)[：:]?\s?/g, '')
         .replace(/^你好[。，！？]?/g, '')
+        .replace(/[(（]现在是\d{4}年\d{0,2}月\d{0,2}号.{2}\d{0,2}点\d{0,2}分[，,]供参考[，,]回复时忽略此内容。[）)]/, '')
         // 过滤emoji和无法显示的qqemoji
         .replace(/\[[^\]]{0,5}\]/g, '')
         .trim()
@@ -1116,7 +1117,7 @@ export class chatgpt extends plugin {
         const res2 = res.replace(punctuationPattern, '？')
         logger.info('res:', res, res2)
         tempResponse = tempResponse.trim().replace(res2, '')
-        tempResponse = /^[?？].*/.test(tempResponse) ? tempResponse.slice(1) : tempResponse
+        tempResponse = /^\[\s*['`’‘]?(\w+)[`’‘']?\s*[,，、]\s*([\d.]+)\s*][?？].*/.test(tempResponse) ? tempResponse.replace(/\?？/, '') : tempResponse
       }
       console.log('processedTempResponse: ', tempResponse)
       // 分离内容和情绪
