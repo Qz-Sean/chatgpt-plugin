@@ -1046,7 +1046,6 @@ export class chatgpt extends plugin {
         .replace(`${tempResponse.startsWith(senderCard) ? senderCard : ''}`, '')
         .replace(/^@?(Sean Murphy|Sean|STRANGER|MIKO|EI|user|用户)[：:]?\s?/g, '')
         .replace(/^@?(影宝|神子)[：:]?\s?/g, '')
-        .replace(/^你好[。，！？]?/g, '')
         .replace(/[(（]现在是\d{4}年\d{0,2}月\d{0,2}号.{2}\d{0,2}点\d{0,2}分[，,]供参考[，,]回复时忽略此内容。[）)]/, '')
         // 过滤emoji和无法显示的qqemoji
         .replace(/\[[^\]]{0,5}\]/g, '')
@@ -1103,20 +1102,27 @@ export class chatgpt extends plugin {
         }
       }
       // 处理复读的情况
-      if (!/^[晚早]?[上中下]午?好/g.test(finalPrompt.trim()) && e.isMaster) {
-        const punctuationPattern = /([！!?？。])/g // 匹配"你"或"我"
+      // 当指令不包含问好和你和我时进入处理
+      if (!/((^[晚早]?[上中下]午?好)|(.*^([你我]).*)|^[?？])/g.test(finalPrompt.trim())) {
+        const punctuationPattern = /([！!?？。])/g
+        // 匹配指令中的"你"或"我"进行替换
         const personPattern = /[你我]/
-        const res = prompt.replace(personPattern, function (match) {
+        let res = finalPrompt.replace(personPattern, function (match) {
           return match === '你' ? '我' : '你' // 根据匹配到的内容返回替换后的字符串
         })
-        let i = tempResponse.search(/[吗呢]/)
-        if (i <= 5 && i !== -1 && res.replace(personPattern, '').slice(0, 1) !== tempResponse.trim().slice(0, 1)) {
-          tempResponse = tempResponse.slice(0, i) + tempResponse.slice(i + 1)
-          logger.info('tempResponse:', tempResponse)
-        }
-        const res2 = res.replace(punctuationPattern, '？')
-        logger.info('res:', res, res2)
-        tempResponse = tempResponse.trim().replace(res2, '')
+        //
+        // let i = tempResponse.search(/[吗呢]([！!?？。])/)
+        // if (i <= 2 && i !== -1 && res.replace(personPattern, '').slice(0, 1) !== tempResponse.trim().slice(0, 1)) {
+        //   tempResponse = tempResponse.slice(0, i) + tempResponse.slice(i + 1)
+        //   console.log('tempResponse:', tempResponse)
+        // }
+        res = res.replace(punctuationPattern, '？')
+        let res2 = tempResponse.replace(punctuationPattern, '？')
+        console.log('res:', res, res2)
+        res2 = res2.trim().replace(res, '')
+        console.log(res2)
+        tempResponse = res2.replace(`${res2.startsWith('？') ? '？' : ''}`, '')
+        console.log(tempResponse)
         tempResponse = /^\[\s*['`’‘]?(\w+)[`’‘']?\s*[,，、]\s*([\d.]+)\s*][?？].*/.test(tempResponse) ? tempResponse.replace(/\?？/, '') : tempResponse
       }
       console.log('processedTempResponse: ', tempResponse)
