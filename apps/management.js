@@ -1,13 +1,23 @@
 import plugin from '../../../lib/plugins/plugin.js'
 import { Config } from '../utils/config.js'
 import { exec } from 'child_process'
-import { checkPnpm, formatDuration, parseDuration, getPublicIP, renderUrl } from '../utils/common.js'
+import {
+  checkPnpm,
+  formatDuration,
+  parseDuration,
+  getPublicIP,
+  renderUrl,
+  makeForwardMsg,
+  getDefaultReplySetting
+} from '../utils/common.js'
 import SydneyAIClient from '../utils/SydneyAIClient.js'
-import { convertSpeaker, speakers } from '../utils/tts.js'
+import { convertSpeaker, speakers as vitsRoleList } from '../utils/tts.js'
 import md5 from 'md5'
 import path from 'path'
 import fs from 'fs'
 import loader from '../../../lib/plugins/loader.js'
+import { supportConfigurations as voxRoleList } from '../utils/tts/voicevox.js'
+import { supportConfigurations as azureRoleList } from '../utils/tts/microsoft-azure.js'
 let isWhiteList = true
 export class ChatgptManagement extends plugin {
   constructor (e) {
@@ -214,25 +224,78 @@ export class ChatgptManagement extends plugin {
           fnc: 'commandHelp'
         },
         {
-          reg: '^#语音切换',
+          reg: '^#语音切换.*',
           fnc: 'ttsSwitch',
           permission: 'master'
+        },
+        {
+          reg: '^#chatgpt角色列表$',
+          fnc: 'getTTSRoleList'
+        },
+        {
+          reg: '^#chatgpt设置后台(刷新|refresh)(t|T)oken$',
+          fnc: 'setOpenAIPlatformToken'
         }
       ]
     })
   }
 
-  async ttsSwitch (e) {
-    let regExp = /#语音切换(.*)/
-    let match = e.msg.match(regExp)
-    if (match[1] === 'vits' || match[1] === 'azure') {
-      Config.ttsMode = match[1] === 'vits' ? 'vits-uma-genshin-honkai' : 'azure'
-      await this.reply(`语音回复已切换至${Config.ttsMode}模式`)
-    } else {
-      await this.reply('暂不支持此模式，当前支持vits，azure。')
+  async getTTSRoleList (e) {
+    let userReplySetting = await redis.get(`CHATGPT:USER:${e.sender.user_id}`)
+    userReplySetting = !userReplySetting
+      ? getDefaultReplySetting()
+      : JSON.parse(userReplySetting)
+    if (!userReplySetting.useTTS) return
+    let ttsMode = Config.ttsMode
+    let roleList = []
+    if (ttsMode === 'vits-uma-genshin-honkai') {
+      const [firstHalf, secondHalf] = [vitsRoleList.slice(0, Math.floor(vitsRoleList.length / 2)).join('、'), vitsRoleList.slice(Math.floor(vitsRoleList.length / 2)).join('、')]
+      const [chunk1, chunk2] = [firstHalf.match(/[^、]+(?:、[^、]+){0,30}/g), secondHalf.match(/[^、]+(?:、[^、]+){0,30}/g)]
+      const list = [await makeForwardMsg(e, chunk1, `${Config.ttsMode}角色列表1`), await makeForwardMsg(e, chunk2, `${Config.ttsMode}角色列表2`)]
+      roleList = await makeForwardMsg(e, list, `${Config.ttsMode}角色列表`)
+      await this.reply(roleList)
+      return
+    } else if (ttsMode === 'voicevox') {
+      roleList = voxRoleList.map(item => item.name).join('、')
+    } else if (ttsMode === 'azure') {
+      roleList = azureRoleList.map(item => item.name).join('、')
     }
-    return 0
+    if (roleList.length > 300) {
+      let chunks = roleList.match(/[^、]+(?:、[^、]+){0,30}/g)
+      roleList = await makeForwardMsg(e, chunks, `${Config.ttsMode}角色列表`)
+    }
+    await this.reply(roleList)
   }
+  async ttsSwitch (e) {
+    let userReplySetting = await redis.get(`CHATGPT:USER:${e.sender.user_id}`)
+    userReplySetting = !userReplySetting
+      ? getDefaultReplySetting()
+      : JSON.parse(userReplySetting)
+    if (!userReplySetting.useTTS) {
+      let replyMsg
+      if (userReplySetting.usePicture) {
+        replyMsg = `当前为${!userReplySetting.useTTS ? '图片模式' : ''}，请先切换到语音模式吧~`
+      } else {
+        replyMsg = `当前为${!userReplySetting.useTTS ? '文本模式' : ''}，请先切换到语音模式吧~`
+      }
+      await this.reply(replyMsg, e.isGroup)
+      return false
+    }
+    let regExp = /#语音切换(.*)/
+    let ttsMode = e.msg.match(regExp)[1]
+    if (['vits', 'azure', 'voicevox'].includes(ttsMode)) {
+      if (ttsMode === 'vits') {
+        Config.ttsMode = 'vits-uma-genshin-honkai'
+      } else {
+        Config.ttsMode = ttsMode
+      }
+      await this.reply(`语音回复已切换至${Config.ttsMode}模式${Config.ttsMode === 'azure' ? '，建议重新开始对话以获得更好的对话效果！' : ''}`)
+    } else {
+      await this.reply('暂不支持此模式，当前支持vits，azure，voicevox。')
+    }
+    return false
+  }
+
   async commandHelp (e) {
     if (!this.e.isMaster) { return this.reply('你没有权限') }
     if (e.msg.trim() === '#chatgpt指令表帮助') {
@@ -283,8 +346,8 @@ export class ChatgptManagement extends plugin {
         prompts.push(generatePrompt(plugin, commands))
       }
     }
-
-    await this.reply(prompts.join('\n'))
+    let msg = await makeForwardMsg(e, prompts, e.msg.slice(1))
+    await this.reply(msg)
     return true
   }
 
@@ -441,7 +504,7 @@ export class ChatgptManagement extends plugin {
   }
 
   async setDefaultReplySetting (e) {
-    const reg = /^#chatgpt(打开|关闭|设置)?全局((图片模式|语音模式|(语音角色|角色语音|角色).*)|回复帮助)/
+    const reg = /^#chatgpt(打开|关闭|设置)?全局((文本模式|图片模式|语音模式|(语音角色|角色语音|角色).*)|回复帮助)/
     const matchCommand = e.msg.match(reg)
     const settingType = matchCommand[2]
     let replyMsg = ''
@@ -460,6 +523,23 @@ export class ChatgptManagement extends plugin {
           }
         } else if (matchCommand[1] === '设置') {
           replyMsg = '请使用“#chatgpt打开全局图片模式”或“#chatgpt关闭全局图片模式”命令来设置回复模式'
+        } break
+      case '文本模式':
+        if (matchCommand[1] === '打开') {
+          Config.defaultUsePicture = false
+          Config.defaultUseTTS = false
+          replyMsg = 'ChatGPT将默认以文本回复'
+        } else if (matchCommand[1] === '关闭') {
+          if (Config.defaultUseTTS) {
+            replyMsg = 'ChatGPT将默认以语音回复'
+          } else if (Config.defaultUsePicture) {
+            replyMsg = 'ChatGPT将默认以图片回复'
+          } else {
+            Config.defaultUseTTS = true
+            replyMsg = 'ChatGPT将默认以语音回复'
+          }
+        } else if (matchCommand[1] === '设置') {
+          replyMsg = '请使用“#chatgpt打开全局文本模式”或“#chatgpt关闭全局文本模式”命令来设置回复模式'
         } break
       case '语音模式':
         if (!Config.ttsSpace) {
@@ -481,7 +561,7 @@ export class ChatgptManagement extends plugin {
           replyMsg = '请使用“#chatgpt打开全局语音模式”或“#chatgpt关闭全局语音模式”命令来设置回复模式'
         } break
       case '回复帮助':
-        replyMsg = '可使用以下命令配置全局回复:\n#chatgpt(打开/关闭)全局(语音/图片)模式\n#chatgpt设置全局(语音角色|角色语音|角色)+角色名称(留空则为随机)'
+        replyMsg = '可使用以下命令配置全局回复:\n#chatgpt(打开/关闭)全局(语音/图片/文本)模式\n#chatgpt设置全局(语音角色|角色语音|角色)+角色名称(留空则为随机)'
         break
       default:
         if (!Config.ttsSpace) {
@@ -495,7 +575,7 @@ export class ChatgptManagement extends plugin {
             Config.defaultTTSRole = ''
           } else {
             const ttsRole = convertSpeaker(speaker)
-            if (speakers.includes(ttsRole)) {
+            if (vitsRoleList.includes(ttsRole)) {
               Config.defaultTTSRole = ttsRole
               replyMsg = `ChatGPT默认语音角色已被设置为“${ttsRole}”`
             } else {
@@ -1176,5 +1256,20 @@ export class ChatgptManagement extends plugin {
     }
     const viewHost = Config.serverHost ? `http://${Config.serverHost}/` : `http://${await getPublicIP()}:${Config.serverPort || 3321}/`
     await this.reply(`请登录${viewHost + 'admin/dashboard'}进行系统配置`, true)
+  }
+
+  async setOpenAIPlatformToken (e) {
+    this.setContext('doSetOpenAIPlatformToken')
+    await e.reply('请发送refreshToken\n你可以在已登录的platform.openai.com后台界面打开调试窗口，在终端中执行\nJSON.parse(localStorage.getItem(Object.keys(localStorage).filter(k => k.includes(\'auth0\'))[0])).body.refresh_token\n如果仍不能查看余额，请退出登录重新获取刷新令牌')
+  }
+
+  async doSetOpenAIPlatformToken () {
+    let token = this.e.msg
+    if (!token) {
+      return false
+    }
+    Config.OpenAiPlatformRefreshToken = token.replaceAll('\'', '')
+    await this.e.reply('设置成功')
+    this.finish('doSetOpenAIPlatformToken')
   }
 }

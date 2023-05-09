@@ -1,6 +1,7 @@
 import { Config } from './utils/config.js'
 import { speakers } from './utils/tts.js'
 import AzureTTS from './utils/tts/microsoft-azure.js'
+import VoiceVoxTTS from './utils/tts/voicevox.js'
 // 支持锅巴
 export function supportGuoba () {
   return {
@@ -87,13 +88,17 @@ export function supportGuoba () {
               {
                 label: '微软Azure',
                 value: 'azure'
+              },
+              {
+                label: 'VoiceVox',
+                value: 'voicevox'
               }
             ]
           }
         },
         {
           field: 'defaultTTSRole',
-          label: '语音模式默认角色（vits-uma-genshin-honkai）',
+          label: 'vits默认角色',
           bottomHelpMessage: 'vits-uma-genshin-honkai语音模式下，未指定角色时使用的角色。若留空，将使用随机角色回复。若用户通过指令指定了角色，将忽略本设定',
           component: 'Select',
           componentProps: {
@@ -101,23 +106,8 @@ export function supportGuoba () {
           }
         },
         {
-          field: 'autoJapanese',
-          label: '使用vits语音时，将机器人的文字回复翻译成日文后获取语音。需要填写下方配置。配置文档：http://api.fanyi.baidu.com/doc/21',
-          component: 'Switch'
-        },
-        {
-          field: 'baiduTranslateAppId',
-          label: '百度翻译应用ID',
-          component: 'Input'
-        },
-        {
-          field: 'baiduTranslateSecret',
-          label: '百度翻译密钥',
-          component: 'Input'
-        },
-        {
           field: 'azureTTSSpeaker',
-          label: '语音模式默认角色（微软Azure）',
+          label: 'Azure默认角色',
           bottomHelpMessage: '微软Azure语音模式下，未指定角色时使用的角色。若用户通过指令指定了角色，将忽略本设定',
           component: 'Select',
           componentProps: {
@@ -127,6 +117,19 @@ export function supportGuoba () {
                 value: item.code
               }
             })
+          }
+        },
+        {
+          field: 'voicevoxTTSSpeaker',
+          label: 'VoiceVox默认角色',
+          bottomHelpMessage: 'VoiceVox语音模式下，未指定角色时使用的角色。若留空，将使用随机角色回复。若用户通过指令指定了角色，将忽略本设定',
+          component: 'Select',
+          componentProps: {
+            options: VoiceVoxTTS.supportConfigurations.map(item => {
+              return item.styles.map(style => {
+                return `${item.name}-${style.name}`
+              }).concat(item.name)
+            }).flat().concat('随机').map(s => { return { label: s, value: s } })
           }
         },
         {
@@ -150,6 +153,13 @@ export function supportGuoba () {
           field: 'alsoSendText',
           label: '语音同时发送文字',
           bottomHelpMessage: '语音模式下，同时发送文字版，避免音质较低听不懂',
+          component: 'Switch'
+        },
+        {
+          field: 'autoJapanese',
+          label: 'vits模式日语输出',
+          bottomHelpMessage: '使用vits语音时，将机器人的文字回复翻译成日文后获取语音。' +
+              '若想使用插件的翻译功能，发送"#chatgpt翻译帮助"查看使用方法，支持图片翻译，引用翻译...',
           component: 'Switch'
         },
         {
@@ -561,6 +571,12 @@ export function supportGuoba () {
           component: 'Input'
         },
         {
+          field: 'voicevoxSpace',
+          label: 'voicevox语音转换API地址',
+          bottomHelpMessage: '可使用https://2ndelement-voicevox.hf.space, 也可github搜索voicevox-engine自建',
+          component: 'Input'
+        },
+        {
           field: 'azureTTSKey',
           label: 'Azure语音服务密钥',
           component: 'Input'
@@ -574,7 +590,7 @@ export function supportGuoba () {
         {
           field: 'azureTTSEmotion',
           label: 'Azure情绪多样化',
-          bottomHelpMessage: '打开后结束对话以更新情绪配置。支持使用不同的说话风格回复，各个角色支持说话风格详情：https://speech.microsoft.com/portal/voicegallery',
+          bottomHelpMessage: '切换角色后使用"#chatgpt使用设定xxx"重新开始对话以更新不同角色的情绪配置。支持使用不同的说话风格回复，各个角色支持说话风格详情：https://speech.microsoft.com/portal/voicegallery',
           component: 'Switch'
         },
         {
@@ -707,6 +723,12 @@ export function supportGuoba () {
           label: '图片渲染宽度',
           bottomHelpMessage: '聊天页面渲染窗口的宽度',
           component: 'InputNumber'
+        },
+        {
+          field: 'cloudRender',
+          label: '云渲染',
+          bottomHelpMessage: '是否使用云资源进行图片渲染，需要开放服务器端口后才能使用，不支持旧版本渲染',
+          component: 'Switch'
         },
         {
           field: 'chatViewBotName',

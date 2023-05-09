@@ -26,6 +26,7 @@ const defaultConfig = {
   cacheEntry: false,
   apiKey: '',
   openAiBaseUrl: defaultOpenAIReverseProxy,
+  OpenAiPlatformRefreshToken: '',
   openAiForceUseReverse: false,
   drawCD: 30,
   model: '',
@@ -103,17 +104,18 @@ const defaultConfig = {
   slackClaudeGlobalPreset: '',
   slackClaudeSpecifiedChannel: '',
   cloudTranscode: 'https://silk.201666.xyz',
+  cloudRender: false,
   cloudMode: 'url',
   ttsMode: 'vits-uma-genshin-honkai', // or azure
   azureTTSKey: '',
   azureTTSRegion: '',
   azureTTSSpeaker: 'zh-CN-XiaochenNeural',
-  baiduTranslateAppId: '',
-  baiduTranslateSecret: '',
+  voicevoxSpace: '',
+  voicevoxTTSSpeaker: '护士机器子T',
   azureTTSEmotion: false,
   enhanceAzureTTSEmotion: false,
   autoJapanese: false,
-  version: 'v2.5.7'
+  version: 'v2.5.9'
 }
 const _path = process.cwd()
 let config = {}
