@@ -7,11 +7,10 @@ import { ChatGPTAPI } from 'chatgpt'
 import { BingAIClient } from '@waylaidwanderer/chatgpt-api'
 import SydneyAIClient from '../utils/SydneyAIClient.js'
 import { PoeClient } from '../utils/poe/index.js'
-import AzureTTS from '../utils/tts/microsoft-azure.js'
+import AzureTTS, { supportConfigurations } from '../utils/tts/microsoft-azure.js'
 import VoiceVoxTTS from '../utils/tts/voicevox.js'
 import { translate } from '../utils/translate.js'
 import fs from 'fs'
-import { getImg, getImageOcrText } from './entertainment.js'
 import {
   render, renderUrl,
   getMessageById,
@@ -21,7 +20,7 @@ import {
   completeJSON,
   isImage,
   getUserData,
-  getDefaultReplySetting, isCN, getMasterQQ
+  getDefaultReplySetting, isCN, getMasterQQ, getUserReplySetting, getImageOcrText, getImg
 } from '../utils/common.js'
 import { ChatGPTPuppeteer } from '../utils/browser.js'
 import { KeyvFile } from 'keyv-file'
@@ -35,6 +34,8 @@ import uploadRecord from '../utils/uploadRecord.js'
 import { SlackClaudeClient } from '../utils/slack/slackClient.js'
 import { ChatgptManagement } from './management.js'
 import { getPromptByName } from '../utils/prompts.js'
+import BingDrawClient from '../utils/BingDraw.js'
+import XinghuoClient from '../utils/xinghuo/xinghuo.js'
 try {
   await import('emoji-strip')
 } catch (err) {
@@ -161,10 +162,20 @@ export class chatgpt extends plugin {
           fnc: 'bing'
         },
         {
+          reg: '^#claude开启新对话',
+          fnc: 'newClaudeConversation'
+        },
+        {
           /** 命令正则匹配 */
           reg: '^#claude[sS]*',
           /** 执行方法 */
           fnc: 'claude'
+        },
+        {
+          /** 命令正则匹配 */
+          reg: '^#xh[sS]*',
+          /** 执行方法 */
+          fnc: 'xh'
         },
         {
           /** 命令正则匹配 */
@@ -238,10 +249,6 @@ export class chatgpt extends plugin {
           reg: '^#chatgpt删除对话',
           fnc: 'deleteConversation',
           permission: 'master'
-        },
-        {
-          reg: '^#claude开启新对话',
-          fnc: 'newClaudeConversation'
         }
       ]
     })
@@ -288,6 +295,11 @@ export class chatgpt extends plugin {
       // await client.endConversation()
       await redis.del(`CHATGPT:SLACK_CONVERSATION:${e.sender.user_id}`)
       await e.reply('claude对话已结束')
+      return
+    }
+    if (use === 'xh') {
+      await redis.del(`CHATGPT:CONVERSATIONS_XH:${e.sender.user_id}`)
+      await e.reply('星火对话已结束')
       return
     }
     let ats = e.message.filter(m => m.type === 'at')
@@ -440,6 +452,17 @@ export class chatgpt extends plugin {
         }
         break
       }
+      case 'xh': {
+        let cs = await redis.keys('CHATGPT:CONVERSATIONS_XH:*')
+        for (let i = 0; i < cs.length; i++) {
+          await redis.del(cs[i])
+          if (Config.debug) {
+            logger.info('delete slack conversation of qq: ' + cs[i])
+          }
+          deleted++
+        }
+        break
+      }
       case 'bing': {
         let cs = await redis.keys('CHATGPT:CONVERSATIONS_BING:*')
         let we = await redis.keys('CHATGPT:WRONG_EMOTION:*')
@@ -566,12 +589,7 @@ export class chatgpt extends plugin {
   }
 
   async switch2Text (e) {
-    let userSetting = await redis.get(`CHATGPT:USER:${e.sender.user_id}`)
-    if (!userSetting) {
-      userSetting = getDefaultReplySetting()
-    } else {
-      userSetting = JSON.parse(userSetting)
-    }
+    let userSetting = await getUserReplySetting(this.e)
     userSetting.usePicture = false
     userSetting.useTTS = false
     await redis.set(`CHATGPT:USER:${e.sender.user_id}`, JSON.stringify(userSetting))
@@ -599,12 +617,7 @@ export class chatgpt extends plugin {
         }
         break
     }
-    let userSetting = await redis.get(`CHATGPT:USER:${e.sender.user_id}`)
-    if (!userSetting) {
-      userSetting = getDefaultReplySetting()
-    } else {
-      userSetting = JSON.parse(userSetting)
-    }
+    let userSetting = await getUserReplySetting(this.e)
     userSetting.useTTS = true
     userSetting.usePicture = false
     await redis.set(`CHATGPT:USER:${e.sender.user_id}`, JSON.stringify(userSetting))
@@ -651,37 +664,35 @@ export class chatgpt extends plugin {
     let speaker = e.msg.replace(regex, '').trim() || '随机'
     switch (Config.ttsMode) {
       case 'vits-uma-genshin-honkai': {
-        let userSetting = await redis.get(`CHATGPT:USER:${e.sender.user_id}`)
-        if (!userSetting) {
-          userSetting = getDefaultReplySetting()
-        } else {
-          userSetting = JSON.parse(userSetting)
-        }
+        let userSetting = await getUserReplySetting(this.e)
         userSetting.ttsRole = convertSpeaker(speaker)
         if (speakers.indexOf(userSetting.ttsRole) >= 0) {
           await redis.set(`CHATGPT:USER:${e.sender.user_id}`, JSON.stringify(userSetting))
-          await this.reply(`您的默认语音角色已被设置为”${userSetting.ttsRole}“`)
+          await this.reply(`当前语音模式为${Config.ttsMode},您的默认语音角色已被设置为 "${userSetting.ttsRole}" `)
+        } else if (speaker === '随机') {
+          userSetting.ttsRole = '随机'
+          await redis.set(`CHATGPT:USER:${e.sender.user_id}`, JSON.stringify(userSetting))
+          await this.reply(`当前语音模式为${Config.ttsMode},您的默认语音角色已被设置为 "随机" `)
         } else {
           await this.reply(`抱歉，"${userSetting.ttsRole}"我还不认识呢`)
         }
         break
       }
       case 'azure': {
+        let userSetting = await getUserReplySetting(this.e)
         let chosen = AzureTTS.supportConfigurations.filter(s => s.name === speaker)
-        if (chosen.length === 0) {
+        if (speaker === '随机') {
+          userSetting.ttsRoleAzure = '随机'
+          await redis.set(`CHATGPT:USER:${e.sender.user_id}`, JSON.stringify(userSetting))
+          await this.reply(`当前语音模式为${Config.ttsMode},您的默认语音角色已被设置为 "随机" `)
+        } else if (chosen.length === 0) {
           await this.reply(`抱歉，没有"${speaker}"这个角色，目前azure模式下支持的角色有${AzureTTS.supportConfigurations.map(item => item.name).join('、')}`)
         } else {
-          let userSetting = await redis.get(`CHATGPT:USER:${e.sender.user_id}`)
-          if (!userSetting) {
-            userSetting = getDefaultReplySetting()
-          } else {
-            userSetting = JSON.parse(userSetting)
-          }
           userSetting.ttsRoleAzure = chosen[0].code
           await redis.set(`CHATGPT:USER:${e.sender.user_id}`, JSON.stringify(userSetting))
           // Config.azureTTSSpeaker = chosen[0].code
           const supportEmotion = AzureTTS.supportConfigurations.find(config => config.name === speaker)?.emotion
-          await this.reply(`您的默认语音角色已被设置为 ${speaker}-${chosen[0].gender}-${chosen[0].languageDetail} ${supportEmotion && Config.azureTTSEmotion ? '，此角色支持多情绪配置，建议重新使用设定并结束对话以获得最佳体验！' : ''}`)
+          await this.reply(`当前语音模式为${Config.ttsMode},您的默认语音角色已被设置为 ${speaker}-${chosen[0].gender}-${chosen[0].languageDetail} ${supportEmotion && Config.azureTTSEmotion ? '，此角色支持多情绪配置，建议重新使用设定并结束对话以获得最佳体验！' : ''}`)
         }
         break
       }
@@ -693,6 +704,13 @@ export class chatgpt extends plugin {
           speaker = match[1]
           style = match[2]
         }
+        let userSetting = await getUserReplySetting(e)
+        if (speaker === '随机') {
+          userSetting.ttsRoleVoiceVox = '随机'
+          await redis.set(`CHATGPT:USER:${e.sender.user_id}`, JSON.stringify(userSetting))
+          await this.reply(`当前语音模式为${Config.ttsMode},您的默认语音角色已被设置为 "随机" `)
+          break
+        }
         let chosen = VoiceVoxTTS.supportConfigurations.filter(s => s.name === speaker)
         if (chosen.length === 0) {
           await this.reply(`抱歉，没有"${speaker}"这个角色，目前voicevox模式下支持的角色有${VoiceVoxTTS.supportConfigurations.map(item => item.name).join('、')}`)
@@ -702,15 +720,9 @@ export class chatgpt extends plugin {
           await this.reply(`抱歉，"${speaker}"这个角色没有"${style}"这个风格，目前支持的风格有${chosen[0].styles.map(item => item.name).join('、')}`)
           break
         }
-        let userSetting = await redis.get(`CHATGPT:USER:${e.sender.user_id}`)
-        if (!userSetting) {
-          userSetting = getDefaultReplySetting()
-        } else {
-          userSetting = JSON.parse(userSetting)
-        }
         userSetting.ttsRoleVoiceVox = chosen[0].name + (style ? `-${style}` : '')
         await redis.set(`CHATGPT:USER:${e.sender.user_id}`, JSON.stringify(userSetting))
-        await this.reply(`您的默认语音角色已被设置为”${userSetting.ttsRoleVoiceVox}“`)
+        await this.reply(`当前语音模式为${Config.ttsMode},您的默认语音角色已被设置为 "${userSetting.ttsRoleVoiceVox}" `)
         break
       }
     }
@@ -803,15 +815,7 @@ export class chatgpt extends plugin {
   }
 
   async abstractChat (e, prompt, use) {
-    let userSetting = await redis.get(`CHATGPT:USER:${e.sender.user_id}`)
-    if (userSetting) {
-      userSetting = JSON.parse(userSetting)
-      if (Object.keys(userSetting).indexOf('useTTS') < 0) {
-        userSetting.useTTS = Config.defaultUseTTS
-      }
-    } else {
-      userSetting = getDefaultReplySetting()
-    }
+    let userSetting = await getUserReplySetting(this.e)
     let useTTS = !!userSetting.useTTS
     let speaker
     if (Config.ttsMode === 'vits-uma-genshin-honkai') {
@@ -939,8 +943,7 @@ export class chatgpt extends plugin {
       finalPrompt = finalPrompt.replace('回复时忽略此内容。)(', '')
     }
     const emotionFlag = await redis.get(`CHATGPT:WRONG_EMOTION:${e.sender.user_id}`)
-    let userReplySetting = await redis.get(`CHATGPT:USER:${e.sender.user_id}`)
-    userReplySetting = !userReplySetting
+    let userReplySetting = await getUserReplySetting(this.e)
     // 图片模式就不管了，降低抱歉概率
     if (Config.ttsMode === 'azure' && Config.enhanceAzureTTSEmotion && userReplySetting.useTTS === true && await AzureTTS.getEmotionPrompt(e)) {
       switch (emotionFlag) {
@@ -1001,6 +1004,10 @@ export class chatgpt extends plugin {
         }
         case 'browser': {
           key = `CHATGPT:CONVERSATIONS_BROWSER:${e.sender.user_id}`
+          break
+        }
+        case 'xh': {
+          key = `CHATGPT:CONVERSATIONS_XH:${e.sender.user_id}`
           break
         }
       }
@@ -1270,6 +1277,24 @@ export class chatgpt extends plugin {
             await this.reply('合成语音发生错误~')
           }
         } else if (Config.ttsMode === 'azure' && Config.azureTTSKey) {
+          if (speaker !== '随机') {
+            let languagePrefix = AzureTTS.supportConfigurations.find(config => config.code === speaker).languageDetail.charAt(0)
+            languagePrefix = languagePrefix.startsWith('E') ? '英' : languagePrefix
+            ttsResponse = (await translate(ttsResponse, languagePrefix)).replace('\n', '')
+          } else {
+            let role, languagePrefix
+            role = AzureTTS.supportConfigurations[Math.floor(Math.random() * supportConfigurations.length)]
+            speaker = role.code
+            languagePrefix = role.languageDetail.charAt(0).startsWith('E') ? '英' : role.languageDetail.charAt(0)
+            ttsResponse = (await translate(ttsResponse, languagePrefix)).replace('\n', '')
+            if (role?.emotion) {
+              const keys = Object.keys(role.emotion)
+              emotion = keys[Math.floor(Math.random() * keys.length)]
+            }
+            logger.info('using speaker: ' + speaker)
+            logger.info('using language: ' + languagePrefix)
+            logger.info('using emotion: ' + emotion)
+          }
           let ssml = AzureTTS.generateSsml(ttsResponse, {
             speaker,
             emotion,
@@ -1279,6 +1304,7 @@ export class chatgpt extends plugin {
             speaker
           }, await ssml)
         } else if (Config.ttsMode === 'voicevox' && Config.voicevoxSpace) {
+          ttsResponse = (await translate(ttsResponse, '日')).replace('\n', '')
           wav = await VoiceVoxTTS.generateAudio(ttsResponse, {
             speaker
           })
@@ -1470,7 +1496,7 @@ export class chatgpt extends plugin {
     let ats = e.message.filter(m => m.type === 'at')
     if (!e.atme && ats.length > 0) {
       if (Config.debug) {
-        logger.mark('艾特别人了，没艾特我，忽略#bing')
+        logger.mark('艾特别人了，没艾特我，忽略#claude')
       }
       return false
     }
@@ -1479,6 +1505,29 @@ export class chatgpt extends plugin {
       return false
     }
     await this.abstractChat(e, prompt, 'claude')
+    return true
+  }
+
+  async xh (e) {
+    if (!e.isMaster && e.isPrivate && !Config.enablePrivateChat) {
+      // await this.reply('ChatGpt私聊通道已关闭。')
+      return false
+    }
+    if (!Config.allowOtherMode) {
+      return false
+    }
+    let ats = e.message.filter(m => m.type === 'at')
+    if (!e.atme && ats.length > 0) {
+      if (Config.debug) {
+        logger.mark('艾特别人了，没艾特我，忽略#xh')
+      }
+      return false
+    }
+    let prompt = _.replace(e.raw_message.trimStart(), '#xh', '').trim()
+    if (prompt.length === 0) {
+      return false
+    }
+    await this.abstractChat(e, prompt, 'xh')
     return true
   }
 
@@ -1525,7 +1574,7 @@ export class chatgpt extends plugin {
     let cacheData = await this.cacheContent(e, use, content, prompt, quote, mood, suggest, imgUrls)
     const template = use !== 'bing' ? 'content/ChatGPT/index' : 'content/Bing/index'
     if (!Config.oldview) {
-      if (cacheData.error || cacheData.status != 200) { await this.reply(`出现错误：${cacheData.error || 'server error ' + cacheData.status}`, true) } else { await e.reply(await renderUrl(e, viewHost + `page/${cacheData.file}?qr=${Config.showQRCode ? 'true' : 'false'}`, { retType: Config.quoteReply ? 'base64' : '', Viewport: { width: Config.chatViewWidth, height: parseInt(Config.chatViewWidth * 0.56) } }), e.isGroup && Config.quoteReply) }
+      if (cacheData.error || cacheData.status != 200) { await this.reply(`出现错误：${cacheData.error || 'server error ' + cacheData.status}`, true) } else { await e.reply(await renderUrl(e, viewHost + `page/${cacheData.file}?qr=${Config.showQRCode ? 'true' : 'false'}`, { retType: Config.quoteReply ? 'base64' : '', Viewport: { width: Config.chatViewWidth, height: parseInt(Config.chatViewWidth * 0.56) }, func: Config.live2d ? 'window.Live2d == true' : '', dpr: Config.cloudDPR }), e.isGroup && Config.quoteReply) }
     } else {
       if (Config.cacheEntry) cacheData.file = randomString()
       const cacheresOption = {
@@ -1722,6 +1771,25 @@ export class chatgpt extends plugin {
                 })
               }
             }
+            console.log(response)
+            // 处理内容生成的图片
+            if (response.details.imageTag) {
+              if (Config.debug) {
+                logger.mark(`开始生成内容：${response.details.imageTag}`)
+              }
+              let client = new BingDrawClient({
+                baseUrl: Config.sydneyReverseProxy,
+                userToken: bingToken
+              })
+              await redis.set(`CHATGPT:DRAW:${e.sender.user_id}`, 'c', { EX: 30 })
+              try {
+                await client.getImages(response.details.imageTag, e)
+              } catch (err) {
+                await redis.del(`CHATGPT:DRAW:${e.sender.user_id}`)
+                await e.reply('绘图失败：' + err)
+              }
+            }
+
             // 如果token曾经有异常，则清除异常
             let Tokens = JSON.parse(await redis.get('CHATGPT:BING_TOKENS'))
             const TokenIndex = Tokens.findIndex(element => element.Token === abtrs.bingToken)
@@ -1830,7 +1898,8 @@ export class chatgpt extends plugin {
           throw new Error('未绑定Poe Cookie，请使用#chatgpt设置Poe token命令绑定cookie')
         }
         let client = new PoeClient({
-          quora_cookie: cookie
+          quora_cookie: cookie,
+          proxy: Config.proxy
         })
         await client.setCredentials()
         await client.getChatId()
@@ -1862,6 +1931,17 @@ export class chatgpt extends plugin {
         return {
           text
         }
+      }
+      case 'xh': {
+        const ssoSessionId = Config.xinghuoToken
+        if (!ssoSessionId) {
+          throw new Error('未绑定星火token，请使用#chatgpt设置星火token命令绑定token。（获取对话页面的ssoSessionId cookie值）')
+        }
+        let client = new XinghuoClient({
+          ssoSessionId
+        })
+        let response = await client.sendMessage(prompt, conversation?.conversationId)
+        return response
       }
       default: {
         let completionParams = {}
@@ -1953,6 +2033,7 @@ export class chatgpt extends plugin {
         await e.reply(response, true)
       }
     }
+    return true
   }
 
   async emptyQueue (e) {
