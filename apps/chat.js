@@ -1037,6 +1037,7 @@ export class chatgpt extends plugin {
       if (Config.debug) {
         logger.mark({ conversation })
       }
+      logger.info(`chatgpt finalPrompt: ${finalPrompt}`)
       let chatMessage = await this.sendMessage(finalPrompt, conversation, use, e)
       if (use === 'api' && !chatMessage) {
         // 字数超限直接返回
