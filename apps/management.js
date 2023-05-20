@@ -221,7 +221,7 @@ export class ChatgptManagement extends plugin {
           fnc: 'userPage'
         },
         {
-          reg: '^#chatgpt(对话|管理|娱乐|绘图|人物设定|聊天记录)?指令表(帮助|搜索(.+))?',
+          reg: '^#(chatgpt)?(对话|管理|娱乐|绘图|人物设定|聊天记录)?指令表(帮助|搜索(.+))?',
           fnc: 'commandHelp'
         },
         {
@@ -299,7 +299,7 @@ export class ChatgptManagement extends plugin {
 
   async commandHelp (e) {
     if (!this.e.isMaster) { return this.reply('你没有权限') }
-    if (e.msg.trim() === '#chatgpt指令表帮助') {
+    if (/^#(chatgpt)?指令表帮助$/.exec(e.msg.trim())) {
       await this.reply('#chatgpt指令表: 查看本插件的所有指令\n' +
           '#chatgpt(对话|管理|娱乐|绘图|人物设定|聊天记录)指令表: 查看对应功能分类的指令表')
       return false
@@ -332,7 +332,7 @@ export class ChatgptManagement extends plugin {
       }
     }
     if (e.msg.includes('搜索')) {
-      let cmd = e.msg.trim().match(/^#chatgpt(对话|管理|娱乐|绘图|人物设定|聊天记录)?指令表(帮助|搜索(.+))?/)[3]
+      let cmd = e.msg.trim().match(/^#(chatgpt)?(对话|管理|娱乐|绘图|人物设定|聊天记录)?指令表(帮助|搜索(.+))?/)[4]
       logger.warn(cmd)
       if (!cmd) {
         await this.reply('(⊙ˍ⊙)')

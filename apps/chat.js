@@ -941,8 +941,6 @@ export class chatgpt extends plugin {
     const emotionFlag = await redis.get(`CHATGPT:WRONG_EMOTION:${e.sender.user_id}`)
     let userReplySetting = await redis.get(`CHATGPT:USER:${e.sender.user_id}`)
     userReplySetting = !userReplySetting
-        ? getDefaultReplySetting()
-        : JSON.parse(userReplySetting)
     // 图片模式就不管了，降低抱歉概率
     if (Config.ttsMode === 'azure' && Config.enhanceAzureTTSEmotion && userReplySetting.useTTS === true && await AzureTTS.getEmotionPrompt(e)) {
       switch (emotionFlag) {
@@ -960,7 +958,6 @@ export class chatgpt extends plugin {
     if (finalPrompt.includes('回复时忽略此内容。')) {
       finalPrompt = finalPrompt.replace('回复时忽略此内容。)(', '')
     }
-    logger.info('finalPrompt:', finalPrompt)
     let previousConversation
     let conversation = {}
     let key
