@@ -20,7 +20,7 @@ import {
   completeJSON,
   isImage,
   getUserData,
-  getDefaultReplySetting, isCN, getMasterQQ, getUserReplySetting, getImageOcrText, getImg
+  getDefaultReplySetting, isCN, getMasterQQ, getUserReplySetting, getImageOcrText, getImg, processList
 } from '../utils/common.js'
 import { ChatGPTPuppeteer } from '../utils/browser.js'
 import { KeyvFile } from 'keyv-file'
@@ -732,23 +732,6 @@ export class chatgpt extends plugin {
    * #chatgpt
    */
   async chatgpt (e) {
-    if (!e.isMaster && e.isPrivate && !Config.enablePrivateChat) {
-      // await this.reply('ChatGpt私聊通道已关闭。')
-      return false
-    }
-    if (e.isGroup) {
-      let cm = new ChatgptManagement()
-      let [groupWhitelist, groupBlacklist] = await cm.processList(Config.groupWhitelist, Config.groupBlacklist)
-      // logger.info('groupWhitelist:', Config.groupWhitelist, 'groupBlacklist', Config.groupBlacklist)
-      const whitelist = groupWhitelist.filter(group => group.trim())
-      if (whitelist.length > 0 && !whitelist.includes(e.group_id.toString())) {
-        return false
-      }
-      const blacklist = groupBlacklist.filter(group => group.trim())
-      if (blacklist.length > 0 && blacklist.includes(e.group_id.toString())) {
-        return false
-      }
-    }
     let prompt
     if (this.toggleMode === 'at') {
       if (!e.raw_message || e.msg?.startsWith('#')) {
@@ -815,6 +798,23 @@ export class chatgpt extends plugin {
   }
 
   async abstractChat (e, prompt, use) {
+    // 关闭私聊通道后不回复
+    if (!e.isMaster && e.isPrivate && !Config.enablePrivateChat) {
+      return false
+    }
+    // 黑白名单过滤对话
+    let [whitelist, blacklist] = processList(Config.whitelist, Config.blacklist)
+    if (whitelist.length > 0) {
+      if (e.isGroup && !whitelist.includes(e.group_id.toString())) return false
+      const list = whitelist.filter(elem => elem.startsWith('^')).map(elem => elem.slice(1))
+      if (!list.includes(e.sender.user_id.toString())) return false
+    }
+    if (blacklist.length > 0) {
+      if (e.isGroup && blacklist.includes(e.group_id.toString())) return false
+      const list = blacklist.filter(elem => elem.startsWith('^')).map(elem => elem.slice(1))
+      if (list.includes(e.sender.user_id.toString())) return false
+    }
+
     let userSetting = await getUserReplySetting(this.e)
     let useTTS = !!userSetting.useTTS
     let speaker
@@ -1402,10 +1402,6 @@ export class chatgpt extends plugin {
   }
 
   async chatgpt1 (e) {
-    if (!e.isMaster && e.isPrivate && !Config.enablePrivateChat) {
-      await this.reply('ChatGpt私聊通道已关闭。')
-      return false
-    }
     if (!Config.allowOtherMode) {
       return false
     }
@@ -1425,10 +1421,6 @@ export class chatgpt extends plugin {
   }
 
   async chatgpt3 (e) {
-    if (!e.isMaster && e.isPrivate && !Config.enablePrivateChat) {
-      await this.reply('ChatGpt私聊通道已关闭。')
-      return false
-    }
     if (!Config.allowOtherMode) {
       return false
     }
@@ -1467,10 +1459,6 @@ export class chatgpt extends plugin {
   }
 
   async bing (e) {
-    if (!e.isMaster && e.isPrivate && !Config.enablePrivateChat) {
-      await this.reply('ChatGpt私聊通道已关闭。')
-      return false
-    }
     if (!Config.allowOtherMode) {
       return false
     }
@@ -1490,10 +1478,6 @@ export class chatgpt extends plugin {
   }
 
   async claude (e) {
-    if (!e.isMaster && e.isPrivate && !Config.enablePrivateChat) {
-      // await this.reply('ChatGpt私聊通道已关闭。')
-      return false
-    }
     if (!Config.allowOtherMode) {
       return false
     }
@@ -1513,10 +1497,6 @@ export class chatgpt extends plugin {
   }
 
   async xh (e) {
-    if (!e.isMaster && e.isPrivate && !Config.enablePrivateChat) {
-      // await this.reply('ChatGpt私聊通道已关闭。')
-      return false
-    }
     if (!Config.allowOtherMode) {
       return false
     }
@@ -1819,21 +1799,22 @@ export class chatgpt extends plugin {
               // 不减次数
             } else if (message && typeof message === 'string' && message.indexOf('UnauthorizedRequest') > -1) {
               // token过期了
-              let bingTokens = JSON.parse(await redis.get('CHATGPT:BING_TOKENS'))
-              const badBingToken = bingTokens.findIndex(element => element.Token === bingToken)
-              // 可能是微软抽风，给三次机会
-              if (bingTokens[badBingToken].exception) {
-                if (bingTokens[badBingToken].exception <= 3) {
-                  bingTokens[badBingToken].exception += 1
-                } else {
-                  bingTokens[badBingToken].exception = 0
-                  bingTokens[badBingToken].State = '过期'
-                }
-              } else {
-                bingTokens[badBingToken].exception = 1
-              }
-              await redis.set('CHATGPT:BING_TOKENS', JSON.stringify(bingTokens))
-              logger.warn(`token${bingToken}已过期`)
+              // let bingTokens = JSON.parse(await redis.get('CHATGPT:BING_TOKENS'))
+              // const badBingToken = bingTokens.findIndex(element => element.Token === bingToken)
+              // // 可能是微软抽风，给三次机会
+              // if (bingTokens[badBingToken].exception) {
+              //   if (bingTokens[badBingToken].exception <= 3) {
+              //     bingTokens[badBingToken].exception += 1
+              //   } else {
+              //     bingTokens[badBingToken].exception = 0
+              //     bingTokens[badBingToken].State = '过期'
+              //   }
+              // } else {
+              //   bingTokens[badBingToken].exception = 1
+              // }
+              // await redis.set('CHATGPT:BING_TOKENS', JSON.stringify(bingTokens))
+              logger.warn(`token${bingToken}疑似不存在或已过期，再试试`)
+              retry = retry - 0.1
             } else {
               retry--
               errorMessage = message === 'Timed out waiting for response. Try enabling debug mode to see more information.' ? (reply ? `${reply}\n不行了，我的大脑过载了，处理不过来了!` : '必应的小脑瓜不好使了，不知道怎么回答！') : message

@@ -10,7 +10,7 @@ import {
   getVitsRoleList,
   getVoicevoxRoleList,
   makeForwardMsg,
-  parseDuration,
+  parseDuration, processList,
   renderUrl
 } from '../utils/common.js'
 import SydneyAIClient from '../utils/SydneyAIClient.js'
@@ -23,6 +23,7 @@ import VoiceVoxTTS, { supportConfigurations as voxRoleList } from '../utils/tts/
 import { supportConfigurations as azureRoleList } from '../utils/tts/microsoft-azure.js'
 
 let isWhiteList = true
+let isSetGroup = true
 export class ChatgptManagement extends plugin {
   constructor (e) {
     super({
@@ -134,17 +135,17 @@ export class ChatgptManagement extends plugin {
           fnc: 'versionChatGPTPlugin'
         },
         {
-          reg: '^#chatgpt(本群)?(群\\d+)?闭嘴',
+          reg: '^#chatgpt(本群)?(群\\d+)?(关闭|闭嘴|关机|休眠|下班)',
           fnc: 'shutUp',
           permission: 'master'
         },
         {
-          reg: '^#chatgpt(本群)?(群\\d+)?(张嘴|开口|说话|上班)',
+          reg: '^#chatgpt(本群)?(群\\d+)?(打开|开启|启动|激活|张嘴|开口|说话|上班)',
           fnc: 'openMouth',
           permission: 'master'
         },
         {
-          reg: '^#chatgpt查看闭嘴',
+          reg: '^#chatgpt查看?(关闭|闭嘴|关机|休眠|下班|休眠)列表',
           fnc: 'listShutUp',
           permission: 'master'
         },
@@ -201,18 +202,18 @@ export class ChatgptManagement extends plugin {
           permission: 'master'
         },
         {
-          reg: '^#chatgpt(设置|添加)群聊[白黑]名单$',
+          reg: '^#chatgpt(设置|添加)对话[白黑]名单$',
           fnc: 'setList',
           permission: 'master'
         },
         {
-          reg: '^#chatgpt查看群聊[白黑]名单$',
-          fnc: 'checkGroupList',
+          reg: '^#chatgpt(查看)?对话[白黑]名单(帮助)?$',
+          fnc: 'checkList',
           permission: 'master'
         },
         {
-          reg: '^#chatgpt(删除|移除)群聊[白黑]名单$',
-          fnc: 'delGroupList',
+          reg: '^#chatgpt(删除|移除)对话[白黑]名单$',
+          fnc: 'delList',
           permission: 'master'
         },
         {
@@ -251,7 +252,7 @@ export class ChatgptManagement extends plugin {
           fnc: 'setOpenAIPlatformToken'
         },
         {
-          reg: '^#chatgpt查看回复设置$',
+          reg: '^#(chatgpt)?查看回复设置$',
           fnc: 'viewUserSetting'
         }
       ]
@@ -432,134 +433,124 @@ azure语音：Azure 语音是微软 Azure 平台提供的一项语音服务，�
     return true
   }
 
-  /**
-   * 对原始黑白名单进行去重和去除无效群号处理
-   * @param whitelist
-   * @param blacklist
-   * @returns {Promise<any[][]>}
-   */
-  async processList (whitelist, blacklist) {
-    let groupWhitelist = Array.isArray(whitelist)
-      ? whitelist
-      : String(whitelist).split(/[,，]/)
-    let groupBlacklist = !Array.isArray(blacklist)
-      ? blacklist
-      : String(blacklist).split(/[,，]/)
-    groupWhitelist = Array.from(new Set(groupWhitelist)).filter(value => /^[1-9]\d{8,9}$/.test(value))
-    groupBlacklist = Array.from(new Set(groupBlacklist)).filter(value => /^[1-9]\d{8,9}$/.test(value))
-    return [groupWhitelist, groupBlacklist]
-  }
-
   async setList (e) {
     this.setContext('saveList')
     isWhiteList = e.msg.includes('白')
-    const listType = isWhiteList ? '白名单' : '黑名单'
-    await this.reply(`请发送需要设置的群聊${listType}，群号间使用,隔开`, e.isGroup)
+    const listType = isWhiteList ? '对话白名单' : '对话黑名单'
+    await this.reply(`请发送需要添加的${listType}号码，默认设置为添加群号，需要添加QQ号时在前面添加^(例如：^123456)。`, e.isGroup)
     return false
   }
 
   async saveList (e) {
     if (!this.e.msg) return
-    const listType = isWhiteList ? '白名单' : '黑名单'
-    const inputMatch = this.e.msg.match(/\d+/g)
-    let [groupWhitelist, groupBlacklist] = await this.processList(Config.groupWhitelist, Config.groupBlacklist)
-    let inputList = Array.isArray(inputMatch) ? this.e.msg.match(/\d+/g).filter(value => /^[1-9]\d{8,9}$/.test(value)) : []
+    const listType = isWhiteList ? '对话白名单' : '对话黑名单'
+    const regex = /^\^?[1-9]\d{5,9}$/
+    const wrongInput = []
+    const inputSet = new Set()
+    const inputList = this.e.msg.split(/[,，]/).reduce((acc, value) => {
+      if (value.length > 11 || !regex.test(value)) {
+        wrongInput.push(value)
+      } else if (!inputSet.has(value)) {
+        inputSet.add(value)
+        acc.push(value)
+      }
+      return acc
+    }, [])
     if (!inputList.length) {
-      await this.reply('无效输入，请在检查群号是否正确后重新输入', e.isGroup)
+      let replyMsg = '名单更新失败，请在检查输入是否正确后重新输入。'
+      if (wrongInput.length) replyMsg += `\n${wrongInput.length ? '检测到以下错误输入："' + wrongInput.join('，') + '"，已自动忽略。' : ''}`
+      await this.reply(replyMsg, e.isGroup)
       return false
     }
-    inputList = Array.from(new Set(inputList))
-    let whitelist = []
-    let blacklist = []
-    for (const element of inputList) {
-      if (listType === '白名单') {
-        groupWhitelist = groupWhitelist.filter(item => item !== element)
-        whitelist.push(element)
-      } else {
-        groupBlacklist = groupBlacklist.filter(item => item !== element)
-        blacklist.push(element)
-      }
-    }
-    if (!(whitelist.length || blacklist.length)) {
-      await this.reply('无效输入，请在检查群号是否正确或重复添加后重新输入', e.isGroup)
-      return false
+    let [whitelist, blacklist] = processList(Config.whitelist, Config.blacklist)
+    whitelist = [...inputList, ...whitelist]
+    blacklist = [...inputList, ...blacklist]
+    if (listType === '对话白名单') {
+      Config.whitelist = Array.from(new Set(whitelist))
     } else {
-      if (listType === '白名单') {
-        Config.groupWhitelist = groupWhitelist
-          .filter(group => group !== '')
-          .concat(whitelist)
-      } else {
-        Config.groupBlacklist = groupBlacklist
-          .filter(group => group !== '')
-          .concat(blacklist)
-      }
+      Config.blacklist = Array.from(new Set(blacklist))
     }
-    let replyMsg = `群聊${listType}已更新，可通过\n'#chatgpt查看群聊${listType}'查看最新名单\n'#chatgpt移除群聊${listType}'管理名单`
+    let replyMsg = `${listType}已更新，可通过\n"#chatgpt查看${listType}" 查看最新名单\n"#chatgpt移除${listType}" 管理名单${wrongInput.length ? '\n检测到以下错误输入："' + wrongInput.join('，') + '"，已自动忽略。' : ''}`
     if (e.isPrivate) {
-      replyMsg += `\n当前群聊${listType}为：${listType === '白名单' ? Config.groupWhitelist : Config.groupBlacklist}`
+      replyMsg += `\n当前${listType}为：${listType === '对话白名单' ? Config.whitelist : Config.blacklist}`
     }
     await this.reply(replyMsg, e.isGroup)
     this.finish('saveList')
   }
 
-  async checkGroupList (e) {
+  async checkList (e) {
+    if (e.msg.includes('帮助')) {
+      await this.reply('默认设置为添加群号，需要拉黑QQ号时在前面添加^(例如：^123456)，可一次性混合输入多个配置号码，错误项会自动忽略。具体使用指令可通过 "#指令表搜索名单" 查看，白名单优先级高于黑名单。')
+      return true
+    }
     isWhiteList = e.msg.includes('白')
-    const list = isWhiteList ? Config.groupWhitelist : Config.groupBlacklist
+    const list = isWhiteList ? Config.whitelist : Config.blacklist
     const listType = isWhiteList ? '白名单' : '黑名单'
-    const replyMsg = list.length ? `当前群聊${listType}为：${list}` : `当前没有设置任何群聊${listType}`
+    const replyMsg = list.length ? `当前${listType}为：${list}` : `当前没有设置任何${listType}`
     await this.reply(replyMsg, e.isGroup)
     return false
   }
 
-  async delGroupList (e) {
+  async delList (e) {
     isWhiteList = e.msg.includes('白')
-    const listType = isWhiteList ? '白名单' : '黑名单'
+    const listType = isWhiteList ? '对话白名单' : '对话黑名单'
     let replyMsg = ''
-    if (Config.groupWhitelist.length === 0 && Config.groupBlacklist.length === 0) {
-      replyMsg = `当前群聊(白|黑)名单为空，请先添加${listType}吧~`
-    } else if ((listType === '白名单' && !Config.groupWhitelist.length) || (listType === '黑名单' && !Config.groupBlacklist.length)) {
-      replyMsg = `当前群聊${listType}为空，请先添加吧~`
+    if (Config.whitelist.length === 0 && Config.blacklist.length === 0) {
+      replyMsg = '当前对话(白|黑)名单都是空哒，请先添加吧~'
+    } else if ((listType === '对话白名单' && !Config.whitelist.length) || (listType === '对话黑名单' && !Config.blacklist.length)) {
+      replyMsg = `当前${listType}为空，请先添加吧~`
     }
     if (replyMsg) {
       await this.reply(replyMsg, e.isGroup)
       return false
     }
-    this.setContext('confirmDelGroup')
-    await this.reply(`请发送需要删除的群聊${listType}，群号间使用,隔开。输入‘全部删除’清空${listType}。`, e.isGroup)
+    this.setContext('confirmDelList')
+    await this.reply(`请发送需要删除的${listType}号码，号码间使用,隔开。输入‘全部删除’清空${listType}。${e.isPrivate ? '\n当前' + listType + '为：' + (listType === '对话白名单' ? Config.whitelist : Config.blacklist) : ''}`, e.isGroup)
     return false
   }
 
-  async confirmDelGroup (e) {
+  async confirmDelList (e) {
     if (!this.e.msg) return
     const isAllDeleted = this.e.msg.trim() === '全部删除'
-    const groupNumRegex = /^[1-9]\d{8,9}$/
-    const inputMatch = this.e.msg.match(/\d+/g)
-    const validGroups = Array.isArray(inputMatch) ? inputMatch.filter(groupNum => groupNumRegex.test(groupNum)) : []
-    let [groupWhitelist, groupBlacklist] = await this.processList(Config.groupWhitelist, Config.groupBlacklist)
+    const regex = /^\^?[1-9]\d{5,9}$/
+    const wrongInput = []
+    const inputSet = new Set()
+    const inputList = this.e.msg.split(/[,，]/).reduce((acc, value) => {
+      if (value.length > 11 || !regex.test(value)) {
+        wrongInput.push(value)
+      } else if (!inputSet.has(value)) {
+        inputSet.add(value)
+        acc.push(value)
+      }
+      return acc
+    }, [])
+    if (!inputList.length && !isAllDeleted) {
+      let replyMsg = '名单更新失败，请在检查输入是否正确后重新输入。'
+      if (wrongInput.length) replyMsg += `${wrongInput.length ? '\n检测到以下错误输入："' + wrongInput.join('，') + '"，已自动忽略。' : ''}`
+      await this.reply(replyMsg, e.isGroup)
+      return false
+    }
+    let [whitelist, blacklist] = processList(Config.whitelist, Config.blacklist)
     if (isAllDeleted) {
-      Config.groupWhitelist = isWhiteList ? [] : groupWhitelist
-      Config.groupBlacklist = !isWhiteList ? [] : groupBlacklist
+      Config.whitelist = isWhiteList ? [] : whitelist
+      Config.blacklist = !isWhiteList ? [] : blacklist
     } else {
-      if (!validGroups.length) {
-        await this.reply('无效输入，请在检查群号是否正确后重新输入', e.isGroup)
-        return false
-      } else {
-        for (const element of validGroups) {
-          if (isWhiteList) {
-            Config.groupWhitelist = groupWhitelist.filter(item => item !== element)
-          } else {
-            Config.groupBlacklist = groupBlacklist.filter(item => item !== element)
-          }
+      for (const element of inputList) {
+        if (isWhiteList) {
+          Config.whitelist = whitelist.filter(item => item !== element)
+        } else {
+          Config.blacklist = blacklist.filter(item => item !== element)
         }
       }
     }
-    const listType = isWhiteList ? '白名单' : '黑名单'
-    let replyMsg = `群聊${listType}已更新，可通过'#chatgpt查看群聊${listType}'命令查看最新名单`
+    const listType = isWhiteList ? '对话白名单' : '对话黑名单'
+    let replyMsg = `${listType}已更新，可通过 "#chatgpt查看${listType}" 命令查看最新名单${wrongInput.length ? '\n检测到以下错误输入："' + wrongInput.join('，') + '"，已自动忽略。' : ''}`
     if (e.isPrivate) {
-      replyMsg += `\n当前群聊${listType}为：${listType === '白名单' ? Config.groupWhitelist : Config.groupBlacklist}`
+      const list = isWhiteList ? Config.whitelist : Config.blacklist
+      replyMsg = list.length ? `\n当前${listType}为：${list}` : `当前没有设置任何${listType}`
     }
     await this.reply(replyMsg, e.isGroup)
-    this.finish('confirmDelGroup')
+    this.finish('confirmDelList')
   }
 
   async enablePrivateChat (e) {
@@ -655,7 +646,6 @@ azure语音：Azure 语音是微软 Azure 平台提供的一项语音服务，�
         }
         if (settingType.match(/(语音角色|角色语音|角色)/)) {
           const voiceKind = matchCommand[5]
-          logger.warn(voiceKind)
           let speaker = matchCommand[6] || ''
           if (voiceKind === undefined) {
             await this.reply('请选择需要设置的语音类型。使用"#chatgpt语音服务"查看支持的语音类型')
@@ -1109,7 +1099,7 @@ Poe 模式会调用 Poe 中的 Claude-instant 进行对话。需要提供 Cookie
   }
 
   async shutUp (e) {
-    let duration = e.msg.replace(/^#chatgpt(本群)?(群\d+)?闭嘴/, '')
+    let duration = e.msg.replace(/^#chatgpt(本群)?(群\d+)?(关闭|闭嘴|关机|休眠|下班)/, '')
     let scope
     let time = 3600000
     if (duration === '永久') {
@@ -1117,20 +1107,20 @@ Poe 模式会调用 Poe 中的 Claude-instant 进行对话。需要提供 Cookie
     } else if (duration) {
       time = parseDuration(duration)
     }
-    const match = e.msg.match(/#chatgpt群(\d+)闭嘴(.*)/)
+    const match = e.msg.match(/#chatgpt群(\d+)?(关闭|闭嘴|关机|休眠|下班)(.*)/)
     if (e.msg.indexOf('本群') > -1) {
       if (e.isGroup) {
         scope = e.group.group_id
         if (await redis.get(`CHATGPT:SHUT_UP:${scope}`)) {
           await redis.del(`CHATGPT:SHUT_UP:${scope}`)
           await redis.set(`CHATGPT:SHUT_UP:${scope}`, '1', { EX: time })
-          await e.reply(`好的，从现在开始我会在当前群聊闭嘴${formatDuration(time)}`)
+          await e.reply(`好的，已切换休眠状态：倒计时${formatDuration(time)}`)
         } else {
           await redis.set(`CHATGPT:SHUT_UP:${scope}`, '1', { EX: time })
-          await e.reply(`好的，从现在开始我会在当前群聊闭嘴${formatDuration(time)}`)
+          await e.reply(`好的，已切换休眠状态：倒计时${formatDuration(time)}`)
         }
       } else {
-        await e.reply('本群是指？你也没在群聊里让我闭嘴啊？')
+        await e.reply('主人，这里好像不是群哦')
         return false
       }
     } else if (match) {
@@ -1139,23 +1129,23 @@ Poe 模式会调用 Poe 中的 Claude-instant 进行对话。需要提供 Cookie
         if (await redis.get(`CHATGPT:SHUT_UP:${groupId}`)) {
           await redis.del(`CHATGPT:SHUT_UP:${groupId}`)
           await redis.set(`CHATGPT:SHUT_UP:${groupId}`, '1', { EX: time })
-          await e.reply(`好的，从现在开始我会在群聊${groupId}闭嘴${formatDuration(time)}`)
+          await e.reply(`好的，即将在群${groupId}中休眠${formatDuration(time)}`)
         } else {
           await redis.set(`CHATGPT:SHUT_UP:${groupId}`, '1', { EX: time })
-          await e.reply(`好的，从现在开始我会在群聊${groupId}闭嘴${formatDuration(time)}`)
+          await e.reply(`好的，即将在群${groupId}中休眠${formatDuration(time)}`)
         }
       } else {
-        await e.reply('这是什么群？')
+        await e.reply('主人还没告诉我群号呢')
         return false
       }
     } else {
       if (await redis.get('CHATGPT:SHUT_UP:ALL')) {
         await redis.del('CHATGPT:SHUT_UP:ALL')
         await redis.set('CHATGPT:SHUT_UP:ALL', '1', { EX: time })
-        await e.reply(`好的，我会再闭嘴${formatDuration(time)}`)
+        await e.reply(`好的，我会延长休眠时间${formatDuration(time)}`)
       } else {
         await redis.set('CHATGPT:SHUT_UP:ALL', '1', { EX: time })
-        await e.reply(`好的，我会闭嘴${formatDuration(time)}`)
+        await e.reply(`好的，我会延长休眠时间${formatDuration(time)}`)
       }
     }
   }
@@ -1164,36 +1154,36 @@ Poe 模式会调用 Poe 中的 Claude-instant 进行对话。需要提供 Cookie
     const match = e.msg.match(/^#chatgpt群(\d+)/)
     if (e.msg.indexOf('本群') > -1) {
       if (await redis.get('CHATGPT:SHUT_UP:ALL')) {
-        await e.reply('主人，我现在全局闭嘴呢，你让我在这个群张嘴咱也不敢张啊')
+        await e.reply('当前为休眠模式，没办法做出回应呢')
         return false
       }
       if (e.isGroup) {
         let scope = e.group.group_id
         if (await redis.get(`CHATGPT:SHUT_UP:${scope}`)) {
           await redis.del(`CHATGPT:SHUT_UP:${scope}`)
-          await e.reply('好的主人，我终于又可以在本群说话了')
+          await e.reply('好的主人，我又可以和大家聊天啦')
         } else {
-          await e.reply('啊？我也没闭嘴啊？')
+          await e.reply('主人，我已经启动过了哦')
         }
       } else {
-        await e.reply('本群是指？你也没在群聊里让我张嘴啊？')
+        await e.reply('主人，这里好像不是群哦')
         return false
       }
     } else if (match) {
       if (await redis.get('CHATGPT:SHUT_UP:ALL')) {
-        await e.reply('主人，我现在全局闭嘴呢，你让我在那个群张嘴咱也不敢张啊')
+        await e.reply('当前为休眠模式，没办法做出回应呢')
         return false
       }
       const groupId = parseInt(match[1], 10)
       if (Bot.getGroupList().get(groupId)) {
         if (await redis.get(`CHATGPT:SHUT_UP:${groupId}`)) {
           await redis.del(`CHATGPT:SHUT_UP:${groupId}`)
-          await e.reply(`好的主人，我终于又可以在群${groupId}说话了`)
+          await e.reply(`好的主人，我终于又可以在群${groupId}和大家聊天了`)
         } else {
-          await e.reply(`啊？我也没在群${groupId}闭嘴啊？`)
+          await e.reply(`主人，我在群${groupId}中已经是启动状态了哦`)
         }
       } else {
-        await e.reply('这是什么群？')
+        await e.reply('主人还没告诉我群号呢')
         return false
       }
     } else {
@@ -1203,14 +1193,14 @@ Poe 模式会调用 Poe 中的 Claude-instant 进行对话。需要提供 Cookie
         for (let i = 0; i < keys.length; i++) {
           await redis.del(keys[i])
         }
-        await e.reply('好的，我会结束所有闭嘴')
+        await e.reply('好的，我会开启所有群聊响应')
       } else if (keys || keys.length > 0) {
         for (let i = 0; i < keys.length; i++) {
           await redis.del(keys[i])
         }
-        await e.reply('好的，我会结束所有闭嘴？')
+        await e.reply('已经开启过全群响应啦')
       } else {
-        await e.reply('我没有在任何地方闭嘴啊？')
+        await e.reply('我没有在任何群休眠哦')
       }
     }
   }
@@ -1218,7 +1208,7 @@ Poe 模式会调用 Poe 中的 Claude-instant 进行对话。需要提供 Cookie
   async listShutUp () {
     let keys = await redis.keys('CHATGPT:SHUT_UP:*')
     if (!keys || keys.length === 0) {
-      await this.reply('我没有在任何群闭嘴', true)
+      await this.reply('已经开启过全群响应啦', true)
     } else {
       let list = []
       for (let i = 0; i < keys.length; i++) {

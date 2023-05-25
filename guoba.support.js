@@ -40,15 +40,15 @@ export function supportGuoba () {
           component: 'InputTextArea'
         },
         {
-          field: 'groupWhitelist',
-          label: '群聊白名单',
-          bottomHelpMessage: '设置后只有白名单内的群可以使用本插件。用英文逗号隔开',
+          field: 'whitelist',
+          label: '对话白名单',
+          bottomHelpMessage: '只有在白名单内的QQ号或群组才能使用本插件进行对话。如果需要添加QQ号，请在号码前面加上^符号（例如：^123456），多个号码之间请用英文逗号(,)隔开。白名单优先级高于黑名单。',
           component: 'Input'
         },
         {
-          field: 'groupBlacklist',
-          label: '群聊黑名单',
-          bottomHelpMessage: '设置后名单内的群禁止使用本插件。用英文逗号隔开',
+          field: 'blacklist',
+          label: '对话黑名单',
+          bottomHelpMessage: '名单内的群或QQ号将无法使用本插件进行对话。如果需要添加QQ号，请在QQ号前面加上^符号（例如：^123456），并用英文逗号（,）将各个号码分隔开。',
           component: 'Input'
         },
         {
@@ -388,6 +388,12 @@ export function supportGuoba () {
           field: 'enforceMaster',
           label: '加强主人认知',
           bottomHelpMessage: '加强主人认知。希望机器人认清主人，避免NTR可开启。开启后可能会与自设定的内容有部分冲突。sydney模式可以放心开启',
+          component: 'Switch'
+        },
+        {
+          field: 'enableGenerateContents',
+          label: '允许生成图像等内容',
+          bottomHelpMessage: '开启后类似网页版能够发图。但是此选项会占用大量token，自设定等模式下容易爆token',
           component: 'Switch'
         },
         // {
