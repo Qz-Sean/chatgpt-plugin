@@ -903,7 +903,7 @@ export class chatgpt extends plugin {
     if (e.isMaster) {
       extraHint = `(${currentTime}，供参考，回复时忽略此内容。)`
       finalPrompt = `${finalPrompt}${extraHint}`
-    } else {
+    } else if (e.isGroup) {
       finalPrompt = finalPrompt.replace('\n', '')
         .replace(/[（[《【<{(]/, '').replace(/[)）\]】>》}]/, '')
         .replace(/(注意)?[：:]?(当前)?和你对话的人是我/g, '')
@@ -945,7 +945,7 @@ export class chatgpt extends plugin {
     const emotionFlag = await redis.get(`CHATGPT:WRONG_EMOTION:${e.sender.user_id}`)
     let userReplySetting = await getUserReplySetting(this.e)
     // 图片模式就不管了，降低抱歉概率
-    if (Config.ttsMode === 'azure' && Config.enhanceAzureTTSEmotion && userReplySetting.useTTS === true && await AzureTTS.getEmotionPrompt(e)) {
+    if (Config.ttsMode === 'azure' && Config.enhanceAzureTTSEmotion && userReplySetting.useTTS === true && await AzureTTS.getEmotionPrompt(e) && userReplySetting.ttsRoleAzure !== '随机') {
       switch (emotionFlag) {
         case '1':
           prompt += '(上一次回复没有添加情绪，请确保接下来的对话正确使用情绪和情绪格式，回复时忽略此内容。)'
@@ -1088,7 +1088,7 @@ export class chatgpt extends plugin {
       let suggestedResponses = `${chatMessage.suggestedResponses !== undefined ? chatMessage.suggestedResponses.replace(/(STRANGER|EI|MIKO)[:：]?\s?/g, '') : chatMessage.suggestedResponses}`
       tempResponse = rawResponse.trim()
       let emotion, emotionDegree
-      if (Config.ttsMode === 'azure' && (use === 'claude' || use === 'bing') && await AzureTTS.getEmotionPrompt(e)) {
+      if (Config.ttsMode === 'azure' && (use === 'claude' || use === 'bing') && await AzureTTS.getEmotionPrompt(e) && userReplySetting.ttsRoleAzure !== '随机') {
         let ttsRoleAzure = userReplySetting.ttsRoleAzure
         const emotionReg = /\[\s*['`’‘]?(\w+)[`’‘']?\s*[,，、]\s*([\d.]+)\s*\]/
         const emotionTimes = tempResponse.match(/\[\s*['`’‘]?(\w+)[`’‘']?\s*[,，、]\s*([\d.]+)\s*\]/g)
@@ -1138,6 +1138,9 @@ export class chatgpt extends plugin {
           logger.warn('回复不包含情绪')
           await redis.set(`CHATGPT:WRONG_EMOTION:${e.sender.user_id}`, '1')
         }
+      }
+      if (userReplySetting.ttsRoleAzure === '随机') {
+        tempResponse = tempResponse.replace(/\[\s*['`’‘]?(\w+)[`’‘']?\s*[,，、]\s*([\d.]+)\s*\]/g, '').trim()
       }
       // 处理开头的无意义文字
       tempResponse = tempResponse
