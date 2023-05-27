@@ -919,13 +919,13 @@ export class chatgpt extends plugin {
       logger.warn(qq,title,nickname,card)
       let promptPrefix = ''
       // 第一次判断是否喊qq号和头衔
-      nPrompt = finalPrompt.replace(new RegExp(title, 'g'), '').replace(new RegExp(qq, 'g'), '')
+      nPrompt = finalPrompt.replace(new RegExp(title, 'g'), e.sender.title || '').replace(new RegExp(qq, 'g'), e.sender.user_id || '')
       finalPrompt = nPrompt
       // 判断是否含@主人
       let nameFlag = nPrompt.includes(`@${nickname}`) || nPrompt.includes(`@${card}`)
       nnPrompt = nameFlag
         ? nPrompt
-        : nPrompt.replace(new RegExp(card, 'g'), '').replace(new RegExp(nickname, 'g'), '')
+        : nPrompt.replace(new RegExp(card, 'g'), e.sender.card || '').replace(new RegExp(nickname, 'g'), e.sender.nickname || '')
       finalPrompt = nnPrompt
       if (finalPrompt !== nPrompt) {
         let i = /title|头衔/i.test(nPrompt) || /qq/i.test(nPrompt)
