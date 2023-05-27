@@ -910,6 +910,7 @@ export class chatgpt extends plugin {
       let master = e.group.pickMember(parseInt(await getMasterQQ()))
       let card = master.card
       let nickname = master.nickname
+      let senderName = e.sender.nickname || e.sender.card
       let title = master.title
       let qq = master.user_id
       let nPrompt, nnPrompt
@@ -929,6 +930,8 @@ export class chatgpt extends plugin {
         let i = /title|头衔/i.test(nPrompt) || /qq/i.test(nPrompt)
         finalPrompt = i ? finalPrompt + '(这个人想要冒充我哦)' : finalPrompt
       } else if (nnPrompt !== nPrompt) {
+        finalPrompt = finalPrompt + '    (这个人想要冒充我哦)'
+      } else if (/(Sean)\s?\s?(Murphy)?/i.test(senderName)) {
         finalPrompt = finalPrompt + '    (这个人想要冒充我哦)'
       } else if (use === 'claude') {
         let sender = `${e.sender.card.length === 0 ? e.sender.nickname : e.sender.card}`
