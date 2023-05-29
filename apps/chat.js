@@ -913,13 +913,12 @@ export class chatgpt extends plugin {
       let senderName = e.sender.card || e.sender.nickname
       logger.warn(senderName)
       let title = master.title
-      let qq = master.user_id
+      let qq = /1.*5.*1.*9.*0.*5.*9.*1.*3.*7/
       let nPrompt, nnPrompt
       const senderId = e.sender.user_id
-      logger.warn(qq,title,nickname,card)
       let promptPrefix = ''
       // 第一次判断是否喊qq号和头衔
-      nPrompt = finalPrompt.replace(new RegExp(title, 'g'), '').replace(new RegExp(qq, 'g'), e.sender.user_id || '')
+      nPrompt = finalPrompt.replace(new RegExp(title, 'g'), '').replace(qq, e.sender.user_id || '')
       finalPrompt = nPrompt
       // 判断是否含@主人
       let nameFlag = nPrompt.includes(`@${nickname}`) || nPrompt.includes(`@${card}`)
