@@ -10,7 +10,7 @@ import { PoeClient } from '../utils/poe/index.js'
 import AzureTTS, { supportConfigurations } from '../utils/tts/microsoft-azure.js'
 import VoiceVoxTTS from '../utils/tts/voicevox.js'
 import { translate } from '../utils/translate.js'
-import fs from 'fs'
+import fs from "fs"
 import {
   render, renderUrl,
   getMessageById,
