@@ -22,7 +22,7 @@ export const translateLangSupports = [
 const API_ERROR = '出了点小问题，待会再试试吧'
 export async function translate (msg, to = 'auto') {
   let from = 'auto'
-  if (to !== 'auto') to = translateLangSupports.find(item => item.abbr == to)?.code
+  if (to !== 'auto') to = translateLangSupports.find(item => item.abbr === to)?.code
   if (!to) return `未找到翻译的语种，支持的语言为：\n${translateLangSupports.map(item => item.abbr).join('，')}\n`
   // 翻译结果为空的提示
   const RESULT_ERROR = '找不到翻译结果'

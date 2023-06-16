@@ -118,12 +118,12 @@ export function supportGuoba () {
               label: '随机',
               value: '随机'
             },
-            ...azureRoleList.flatMap(item => [
-              item.roleInfo
-            ]).map(s => ({
-              label: s,
-              value: s
-            }))]
+              ...azureRoleList.flatMap(item => [
+                item.roleInfo
+              ]).map(s => ({
+                label: s,
+                value: s
+              }))]
           }
         },
         {
@@ -136,13 +136,13 @@ export function supportGuoba () {
               label: '随机',
               value: '随机'
             },
-            ...voxRoleList.flatMap(item => [
-              ...item.styles.map(style => `${item.name}-${style.name}`),
-              item.name
-            ]).map(s => ({
-              label: s,
-              value: s
-            }))]
+              ...voxRoleList.flatMap(item => [
+                ...item.styles.map(style => `${item.name}-${style.name}`),
+                item.name
+              ]).map(s => ({
+                label: s,
+                value: s
+              }))]
           }
         },
         {
@@ -792,7 +792,7 @@ export function supportGuoba () {
       setConfigData (data, { Result }) {
         for (let [keyPath, value] of Object.entries(data)) {
           // 处理黑名单
-          if (keyPath === 'blockWords' || keyPath === 'promptBlockWords' || keyPath === 'initiativeChatGroups') { value = value.toString().split(/[,，;；\|]/) }
+          if (keyPath === 'blacklist' || keyPath === 'whitelist' || keyPath === 'blockWords' || keyPath === 'promptBlockWords' || keyPath === 'initiativeChatGroups') { value = value.toString().split(/[,，;；\|]/) }
           if (Config[keyPath] !== value) { Config[keyPath] = value }
         }
         // 正确储存azureRoleSelect结果

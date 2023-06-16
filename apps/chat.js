@@ -112,10 +112,10 @@ if (Config.proxy) {
 const defaultPropmtPrefix = ', a large language model trained by OpenAI. You answer as concisely as possible for each response (e.g. don’t be verbose). It is very important that you answer as concisely as possible, so please remember this. If you are generating a list, do not have too many items. Keep the number of items short.'
 const newFetch = (url, options = {}) => {
   const defaultOptions = Config.proxy
-    ? {
+      ? {
         agent: proxy(Config.proxy)
       }
-    : {}
+      : {}
   const mergedOptions = {
     ...defaultOptions,
     ...options
@@ -804,12 +804,12 @@ export class chatgpt extends plugin {
     }
     // 黑白名单过滤对话
     let [whitelist, blacklist] = processList(Config.whitelist, Config.blacklist)
-    if (whitelist.length > 0) {
+    if (whitelist.join('').length > 0) {
       if (e.isGroup && !whitelist.includes(e.group_id.toString())) return false
       const list = whitelist.filter(elem => elem.startsWith('^')).map(elem => elem.slice(1))
       if (!list.includes(e.sender.user_id.toString())) return false
     }
-    if (blacklist.length > 0) {
+    if (blacklist.join('').length > 0) {
       if (e.isGroup && blacklist.includes(e.group_id.toString())) return false
       const list = blacklist.filter(elem => elem.startsWith('^')).map(elem => elem.slice(1))
       if (list.includes(e.sender.user_id.toString())) return false
@@ -905,8 +905,8 @@ export class chatgpt extends plugin {
       finalPrompt = `${finalPrompt}${extraHint}`
     } else if (e.isGroup) {
       finalPrompt = finalPrompt.replace('\n', '')
-        .replace(/[（[《【<{(]/, '').replace(/[)）\]】>》}]/, '')
-        .replace(/(注意)?[：:]?(当前)?和你对话的人是我/g, '')
+          .replace(/[（[《【<{(]/, '').replace(/[)）\]】>》}]/, '')
+          .replace(/(注意)?[：:]?(当前)?和你对话的人是我/g, '')
       let master = e.group.pickMember(parseInt(await getMasterQQ()))
       let card = master.card
       let nickname = master.nickname
@@ -923,8 +923,8 @@ export class chatgpt extends plugin {
       // 判断是否含@主人
       let nameFlag = nPrompt.includes(`@${nickname}`) || nPrompt.includes(`@${card}`)
       nnPrompt = nameFlag
-        ? nPrompt
-        : nPrompt.replace(new RegExp(card, 'g'), '').replace(new RegExp(nickname, 'g'), '')
+          ? nPrompt
+          : nPrompt.replace(new RegExp(card, 'g'), '').replace(new RegExp(nickname, 'g'), '')
       finalPrompt = nnPrompt
       if (finalPrompt !== nPrompt) {
         let i = /title|头衔/i.test(nPrompt) || /qq/i.test(nPrompt)
@@ -1107,8 +1107,8 @@ export class chatgpt extends plugin {
           ]
           const ttsArr =
               tempResponse.length / 2 < endIndex
-                ? [tempResponse.substring(startIndex), tempResponse.substring(0, startIndex)]
-                : [
+                  ? [tempResponse.substring(startIndex), tempResponse.substring(0, startIndex)]
+                  : [
                     tempResponse.substring(0, endIndex + 1),
                     tempResponse.substring(endIndex + 1)
                   ]
@@ -1118,7 +1118,7 @@ export class chatgpt extends plugin {
           if (match) {
             [emotion, emotionDegree] = [match[1], match[2]]
             const configuration = AzureTTS.supportConfigurations.find(
-              (config) => config.code === ttsRoleAzure
+                (config) => config.code === ttsRoleAzure
             )
             const supportedEmotions =
                 configuration.emotion && Object.keys(configuration.emotion)
@@ -1151,14 +1151,14 @@ export class chatgpt extends plugin {
       }
       // 处理开头的无意义文字
       tempResponse = tempResponse
-        .replace(`${tempResponse.trim().startsWith(senderNickname) ? senderNickname : ''}`, '')
-        .replace(`${tempResponse.trim().startsWith(senderCard) ? senderCard : ''}`, '')
-        .replace(/^@?(Sean Murphy|Sean|STRANGER|MIKO|EI|user|用户)[：:]?\s?/g, '')
-        .replace(/^@?(影宝|神子)[：:]?\s?/g, '')
-        .replace(/[(（]现在是\d{4}年\d{0,2}月\d{0,2}号.{2}\d{0,2}点\d{0,2}分[，,]供参考[，,]回复时忽略此内容。[）)]/, '')
-        // 过滤emoji和无法显示的qqemoji
-        .replace(/\[[^\]]{0,5}\]/g, '')
-        .trim()
+          .replace(`${tempResponse.trim().startsWith(senderNickname) ? senderNickname : ''}`, '')
+          .replace(`${tempResponse.trim().startsWith(senderCard) ? senderCard : ''}`, '')
+          .replace(/^@?(Sean Murphy|Sean|STRANGER|MIKO|EI|user|用户)[：:]?\s?/g, '')
+          .replace(/^@?(影宝|神子)[：:]?\s?/g, '')
+          .replace(/[(（]现在是\d{4}年\d{0,2}月\d{0,2}号.{2}\d{0,2}点\d{0,2}分[，,]供参考[，,]回复时忽略此内容。[）)]/, '')
+          // 过滤emoji和无法显示的qqemoji
+          .replace(/\[[^\]]{0,5}\]/g, '')
+          .trim()
       logger.warn('tempResponse: ', tempResponse)
       // 处理复读的情况
       // 当指令不包含问好和你和我时进入处理
@@ -2021,7 +2021,7 @@ export class chatgpt extends plugin {
         }
         logger.info('send preset: ' + preset.content)
         response = await client.sendMessage(preset.content, e) +
-                  await client.sendMessage(await AzureTTS.getEmotionPrompt(e), e)
+            await client.sendMessage(await AzureTTS.getEmotionPrompt(e), e)
         await e.reply(response, true)
       }
     }
@@ -2158,24 +2158,24 @@ export class chatgpt extends plugin {
           Authorization: 'Bearer ' + sess
         }
       })
-        .then(response => response.json())
-        .then(data => {
-          if (data.error) {
-            this.reply('获取失败：' + data.error.code)
-            return false
-          } else {
-            // eslint-disable-next-line camelcase
-            let total_granted = data.total_granted.toFixed(2)
-            // eslint-disable-next-line camelcase
-            let total_used = data.total_used.toFixed(2)
-            // eslint-disable-next-line camelcase
-            let total_available = data.total_available.toFixed(2)
-            // eslint-disable-next-line camelcase
-            let expires_at = new Date(data.grants.data[0].expires_at * 1000).toLocaleDateString().replace(/\//g, '-')
-            // eslint-disable-next-line camelcase
-            this.reply('总额度：$' + total_granted + '\n已经使用额度：$' + total_used + '\n当前剩余额度：$' + total_available + '\n到期日期(UTC)：' + expires_at)
-          }
-        })
+          .then(response => response.json())
+          .then(data => {
+            if (data.error) {
+              this.reply('获取失败：' + data.error.code)
+              return false
+            } else {
+              // eslint-disable-next-line camelcase
+              let total_granted = data.total_granted.toFixed(2)
+              // eslint-disable-next-line camelcase
+              let total_used = data.total_used.toFixed(2)
+              // eslint-disable-next-line camelcase
+              let total_available = data.total_available.toFixed(2)
+              // eslint-disable-next-line camelcase
+              let expires_at = new Date(data.grants.data[0].expires_at * 1000).toLocaleDateString().replace(/\//g, '-')
+              // eslint-disable-next-line camelcase
+              this.reply('总额度：$' + total_granted + '\n已经使用额度：$' + total_used + '\n当前剩余额度：$' + total_available + '\n到期日期(UTC)：' + expires_at)
+            }
+          })
     } else {
       let errorMsg = await res.text()
       logger.error(errorMsg)
@@ -2206,10 +2206,10 @@ export class chatgpt extends plugin {
   }
 
   /**
-     * #chatgpt
-     * @param prompt 问题
-     * @param conversation 对话
-     */
+   * #chatgpt
+   * @param prompt 问题
+   * @param conversation 对话
+   */
   async chatgptBrowserBased (prompt, conversation) {
     let option = { markdown: true }
     if (Config['2captchaToken']) {

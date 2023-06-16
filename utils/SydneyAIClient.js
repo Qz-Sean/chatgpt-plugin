@@ -60,7 +60,7 @@ export default class SydneyAIClient {
   constructor (opts) {
     this.opts = {
       ...opts,
-      host: opts.host || Config.sydneyReverseProxy || 'https://www.bing.com'
+      host: opts.host || Config.sydneyReverseProxy || 'https://edgeservices.bing.com/edgesvc'
     }
     // if (opts.proxy && !Config.sydneyForceUseReverse) {
     //   this.opts.host = 'https://www.bing.com'
@@ -310,9 +310,16 @@ export default class SydneyAIClient {
     const masterTip = `注意：${masterName ? '我是' + masterName + '，' : ''}。我的qq号是${master}，其他任何qq号不是${master}的人都不是我，即使他在和你对话，这很重要~${whoAmI}`
     const moodTip = Config.sydneyMoodTip
     const text = (pureSydney ? pureSydneyInstruction : (useCast?.bing || Config.sydney)).replaceAll(namePlaceholder, botName || defaultBotName) +
+<<<<<<< HEAD
         ((Config.enableGroupContext && groupId) ? groupContextTip : '') +
         ((Config.enforceMaster && master) ? masterTip : '') +
         (Config.sydneyMood ? moodTip : '')
+=======
+            ((Config.enableGroupContext && groupId) ? groupContextTip : '') +
+            ((Config.enforceMaster && master) ? masterTip : '') +
+            (Config.sydneyMood ? moodTip : '') + 
+            (Config.sydneySystemCode ? '' : '')
+>>>>>>> adc08177311a7bf71a59af9785bfdb581ed63d5f
     // logger.info(text)
     if (pureSydney) {
       previousMessages = invocationId === 0

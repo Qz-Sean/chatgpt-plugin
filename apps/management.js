@@ -259,6 +259,8 @@ export class ChatgptManagement extends plugin {
     })
   }
 
+
+
   async viewUserSetting (e) {
     const userSetting = await getUserReplySetting(this.e)
     const replyMsg = `${this.e.sender.user_id}的回复设置:
@@ -307,9 +309,7 @@ azure语音：Azure 语音是微软 Azure 平台提供的一项语音服务，�
           roleList = getVoicevoxRoleList()
           break
         case 'azure':
-          if (matchCommand[2] === 'azure') {
-            roleList = getAzureRoleList()
-          }
+          roleList = getAzureRoleList()
           break
         default:
           break
@@ -756,11 +756,11 @@ azure语音：Azure 语音是微软 Azure 平台提供的一项语音服务，�
     if (token) {
       token = token.split('|')
       token = token.map((item, index) => (
-        {
-          Token: item,
-          State: '正常',
-          Usage: 0
-        }
+          {
+            Token: item,
+            State: '正常',
+            Usage: 0
+          }
       ))
     } else {
       token = []
@@ -780,10 +780,10 @@ azure语音：Azure 语音是微软 Azure 平台提供的一项语音服务，�
     if (tokens) tokens = JSON.parse(tokens)
     else tokens = []
     tokens = tokens.length > 0
-      ? tokens.map((item, index) => (
+        ? tokens.map((item, index) => (
             `【${index}】 Token：${item.Token.substring(0, 5 / 2) + '...' + item.Token.substring(item.Token.length - 5 / 2, item.Token.length)}`
-      )).join('\n')
-      : '无必应Token记录'
+        )).join('\n')
+        : '无必应Token记录'
     await this.reply(`${tokens}`, true)
     return false
   }
@@ -794,10 +794,10 @@ azure语音：Azure 语音是微软 Azure 平台提供的一项语音服务，�
     if (tokens) tokens = JSON.parse(tokens)
     else tokens = []
     tokens = tokens.length > 0
-      ? tokens.map((item, index) => (
+        ? tokens.map((item, index) => (
             `【${index}】 Token：${item.Token.substring(0, 5 / 2) + '...' + item.Token.substring(item.Token.length - 5 / 2, item.Token.length)}`
-      )).join('\n')
-      : '无必应Token记录'
+        )).join('\n')
+        : '无必应Token记录'
     await this.reply(`请发送要删除的token编号\n${tokens}`, true)
     if (tokens.length == 0) this.finish('saveBingToken')
     return false
